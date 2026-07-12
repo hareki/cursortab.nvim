@@ -8,7 +8,7 @@ viewportBottom: 50
         double indented line
 -- expected --
 stage @1 cursor=1:15
-  modification @1 1-1 replace_chars 4:15
+  modification @1 1-1 inline_diff 4:4->4:15
     + "        double indented line"
     - "    indented line"
 

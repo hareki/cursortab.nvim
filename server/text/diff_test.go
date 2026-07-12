@@ -87,7 +87,7 @@ func TestChangeAppendChars(t *testing.T) {
 	assertChangesEqual(t, expected, actual.ChangesMap())
 }
 
-func TestChangeDeleteChars(t *testing.T) {
+func TestChangeInlineDiffDeletionAtEnd(t *testing.T) {
 	text1 := "Hello world!"
 	text2 := "Hello world"
 
@@ -95,18 +95,18 @@ func TestChangeDeleteChars(t *testing.T) {
 
 	expected := map[int]LineChange{
 		1: {
-			Type:       ChangeDeleteChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello world",
 			OldContent: "Hello world!",
 			ColStart:   11,
-			ColEnd:     12,
+			ColEnd:     11,
 		},
 	}
 
 	assertChangesEqual(t, expected, actual.ChangesMap())
 }
 
-func TestChangeDeleteCharsMiddle(t *testing.T) {
+func TestChangeInlineDiffDeletionMiddle(t *testing.T) {
 	text1 := "Hello world John"
 	text2 := "Hello John"
 
@@ -114,18 +114,18 @@ func TestChangeDeleteCharsMiddle(t *testing.T) {
 
 	expected := map[int]LineChange{
 		1: {
-			Type:       ChangeDeleteChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello John",
 			OldContent: "Hello world John",
 			ColStart:   6,
-			ColEnd:     12,
+			ColEnd:     6,
 		},
 	}
 
 	assertChangesEqual(t, expected, actual.ChangesMap())
 }
 
-func TestChangeReplaceChars(t *testing.T) {
+func TestChangeInlineDiffReplacement(t *testing.T) {
 	text1 := "Hello world"
 	text2 := "Hello there"
 
@@ -133,7 +133,7 @@ func TestChangeReplaceChars(t *testing.T) {
 
 	expected := map[int]LineChange{
 		1: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello there",
 			OldContent: "Hello world",
 			ColStart:   6,
@@ -144,7 +144,7 @@ func TestChangeReplaceChars(t *testing.T) {
 	assertChangesEqual(t, expected, actual.ChangesMap())
 }
 
-func TestChangeReplaceCharsMiddle(t *testing.T) {
+func TestChangeInlineDiffReplacementMiddle(t *testing.T) {
 	text1 := "Hello world John"
 	text2 := "Hello there John"
 
@@ -152,7 +152,7 @@ func TestChangeReplaceCharsMiddle(t *testing.T) {
 
 	expected := map[int]LineChange{
 		1: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello there John",
 			OldContent: "Hello world John",
 			ColStart:   6,
@@ -179,7 +179,7 @@ func TestChangeModificationAndAddition(t *testing.T) {
 
 	expected := map[int]LineChange{
 		2: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    `    console.log("new message");`,
 			OldContent: `    console.log("old message");`,
 			ColStart:   17,
@@ -242,21 +242,21 @@ func TestMultipleCharacterChanges(t *testing.T) {
 
 	expected := map[int]LineChange{
 		1: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello there",
 			OldContent: "Hello world",
 			ColStart:   6,
 			ColEnd:     11,
 		},
 		2: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Goodbye there",
 			OldContent: "Goodbye world",
 			ColStart:   8,
 			ColEnd:     13,
 		},
 		3: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Welcome there",
 			OldContent: "Welcome world",
 			ColStart:   8,
@@ -275,21 +275,21 @@ func TestMixedCharacterOperations(t *testing.T) {
 
 	expected := map[int]LineChange{
 		1: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello there",
 			OldContent: "Hello world",
 			ColStart:   6,
 			ColEnd:     11,
 		},
 		2: {
-			Type:       ChangeDeleteChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Goodbye world",
 			OldContent: "Goodbye world!",
 			ColStart:   13,
-			ColEnd:     14,
+			ColEnd:     13,
 		},
 		3: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Welcome there!",
 			OldContent: "Welcome world",
 			ColStart:   8,
@@ -423,22 +423,22 @@ func TestLineChangeClassification(t *testing.T) {
 		expected ChangeType
 	}{
 		{
-			name:     "Simple word replacement - should be replace_chars",
+			name:     "Simple word replacement - should be inline_diff",
 			oldLine:  "Hello world",
 			newLine:  "Hello there",
-			expected: ChangeReplaceChars,
+			expected: ChangeInlineDiff,
 		},
 		{
-			name:     "Multiple changes - should be modification",
+			name:     "Mostly rewritten line - should be modification",
 			oldLine:  "start middle end",
 			newLine:  "beginning middle finish extra",
 			expected: ChangeModification,
 		},
 		{
-			name:     "Single word change - should be replace_chars",
+			name:     "Single word change - should be inline_diff",
 			oldLine:  "let x = 1;",
 			newLine:  "let x = 10;",
-			expected: ChangeReplaceChars,
+			expected: ChangeInlineDiff,
 		},
 		{
 			name:     "Complex restructuring - should be modification",
@@ -453,16 +453,16 @@ func TestLineChangeClassification(t *testing.T) {
 			expected: ChangeAppendChars,
 		},
 		{
-			name:     "App to server replacement - should be replace_chars",
+			name:     "App to server replacement - should be inline_diff",
 			oldLine:  `app.route("/health", health);`,
 			newLine:  `server.route("/health", health);`,
-			expected: ChangeReplaceChars,
+			expected: ChangeInlineDiff,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			diffType, _, _ := categorizeLineChangeWithColumns(test.oldLine, test.newLine)
+			diffType, _, _, _ := categorizeLineChange(test.oldLine, test.newLine)
 			assert.Equal(t, test.expected, diffType, "change classification")
 		})
 	}
@@ -488,11 +488,18 @@ func TestChangedByteSpanHandlesInvalidUTF8Bytes(t *testing.T) {
 }
 
 func TestCategorizeLineChangeUsesUTF8Boundaries(t *testing.T) {
-	changeType, colStart, colEnd := categorizeLineChangeWithColumns("Hello 🎉 world", "Hello 🚀 world")
+	changeType, colStart, colEnd, spans := categorizeLineChange("Hello 🎉 world", "Hello 🚀 world")
 
-	assert.Equal(t, ChangeReplaceChars, changeType, "change type")
+	assert.Equal(t, ChangeInlineDiff, changeType, "change type")
 	assert.Equal(t, len("Hello "), colStart, "start col")
 	assert.Equal(t, len("Hello 🚀"), colEnd, "end col")
+	assert.Equal(t, 1, len(spans), "span count")
+	assert.Equal(t, InlineSpan{
+		OldStart: len("Hello "),
+		OldEnd:   len("Hello 🎉"),
+		NewStart: len("Hello "),
+		NewEnd:   len("Hello 🚀"),
+	}, spans[0], "span")
 }
 
 func TestEmptyOldText(t *testing.T) {
@@ -1191,9 +1198,11 @@ func TestDiffSingleCharacterChanges(t *testing.T) {
 		expected ChangeType
 	}{
 		{"add single char at end", "hello", "hello!", ChangeAppendChars},
-		{"remove single char at end", "hello!", "hello", ChangeDeleteChars},
-		{"replace single char", "hello", "hallo", ChangeReplaceChars},
-		{"add single char at start", "ello", "hello", ChangeReplaceChars},
+		{"remove single char at end", "hello!", "hello", ChangeInlineDiff},
+		// Whole-word rewrites on single-word lines exceed the insert-ratio
+		// gate, so they render as full-line modifications.
+		{"replace single char", "hello", "hallo", ChangeModification},
+		{"add single char at start", "ello", "hello", ChangeModification},
 	}
 
 	for _, tt := range tests {

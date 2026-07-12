@@ -10,7 +10,7 @@ line 3
 
 -- expected --
 stage @1 cursor=1:0
-  modification @1 1-1 delete_chars 0:6
+  modification @1 1-1 inline_diff 0:6->0:0
     + ""
     - "line 1"
   deletion @2 2-3

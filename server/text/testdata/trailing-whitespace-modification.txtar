@@ -11,7 +11,7 @@ func main() {
     y = processValue(x)
 -- expected --
 stage @2 cursor=2:23
-  modification @2 1-1 replace_chars 6:18
+  modification @2 1-1
     + "    x = getValue()"
     - "    x  "
   addition @3 2-2

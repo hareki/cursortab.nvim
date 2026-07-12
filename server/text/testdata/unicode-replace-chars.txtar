@@ -8,7 +8,7 @@ café old
 café new
 -- expected --
 stage @1 cursor=1:9
-  modification @1 1-1 replace_chars 6:9
+  modification @1 1-1 inline_diff 6:9->6:9
     + "café new"
     - "café old"
 

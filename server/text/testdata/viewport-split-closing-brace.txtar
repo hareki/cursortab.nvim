@@ -60,7 +60,7 @@ export function hasTags(id: string): boolean {
   if (article.tags.length === 0) {
 -- expected --
 stage @12 cursor=1:2
-  modification @13 1-1 delete_chars 2:4
+  modification @13 1-1 inline_diff 2:4->2:2
     + "  article.tags.push(tag);"
     - "    article.tags.push(tag);"
   deletion @12 2-2
@@ -70,8 +70,8 @@ stage @12 cursor=1:2
     + "    article.tags.push(tag);"
     + "  }"
 
-stage @29 cursor=1:34
-  modification @29 1-1
+stage @29 cursor=1:31
+  modification @29 1-1 inline_diff 18:18->18:25 23:27->30:31
     + "  if (article.tags.length === 0) {"
     - "  if (article.tags === null) {"
 

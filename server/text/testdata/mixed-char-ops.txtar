@@ -12,13 +12,13 @@ Goodbye world
 Welcome there!
 -- expected --
 stage @1 cursor=3:14
-  modification @1 1-1 replace_chars 6:11
+  modification @1 1-1 inline_diff 6:11->6:11
     + "Hello there"
     - "Hello world"
-  modification @2 2-2 delete_chars 13:14
+  modification @2 2-2 inline_diff 13:14->13:13
     + "Goodbye world"
     - "Goodbye world!"
-  modification @3 3-3 replace_chars 8:14
+  modification @3 3-3 inline_diff 8:13->8:14
     + "Welcome there!"
     - "Welcome world"
 

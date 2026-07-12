@@ -12,7 +12,7 @@ keep me
 keep me too
 -- expected --
 stage @2 cursor=1:0
-  modification @2 1-1 delete_chars 0:5
+  modification @2 1-1 inline_diff 0:5->0:0
     + ""
     - "hello"
 

@@ -462,7 +462,7 @@ func textEditForCharGroup(group *text.Group) (bufferTextEdit, bool) {
 		return bufferTextEdit{}, false
 	}
 	switch group.RenderHint {
-	case text.HintAppendChars, text.HintReplaceChars, text.HintDeleteChars:
+	case text.HintAppendChars, text.HintInlineDiff:
 	default:
 		return bufferTextEdit{}, false
 	}

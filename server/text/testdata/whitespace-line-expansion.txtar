@@ -12,11 +12,10 @@ viewportBottom: 50
         The coordinates of point A.
 -- expected --
 stage @1 cursor=4:35
-  modification @1 1-1 append_chars 0:14
+  modification @1 1-2
     + "    Parameters"
-    - ""
-  modification @2 2-2 replace_chars 4:14
     + "    ----------"
+    - ""
     - "        "
   addition @3 3-4
     + "    rA : numpy array"

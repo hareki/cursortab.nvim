@@ -16,7 +16,7 @@ respond 2-2
 request-completion manual
 expect shown requests=1
   display:
-    | modification 2 replace_chars
+    | modification 2
     | addition 3 x2
 accept
 expect hidden target=none

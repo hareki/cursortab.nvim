@@ -379,7 +379,7 @@ func finalizeStages(builders []*stageBuilder, newLines []string, oldLines []stri
 					keptAfter(diff.LineMapping, oldIdx, change.NewLineNum, oldLines, newLines) {
 					oldContent := oldLines[oldIdx]
 					if oldContent != "" && strings.TrimSpace(oldContent) == "" {
-						changeType, colStart, colEnd := categorizeLineChangeWithColumns(oldContent, change.Content)
+						changeType, colStart, colEnd, spans := categorizeLineChange(oldContent, change.Content)
 						b.rawChanges = []LineChange{{
 							Type:       changeType,
 							OldLineNum: oldIdx + 1,
@@ -388,6 +388,7 @@ func finalizeStages(builders []*stageBuilder, newLines []string, oldLines []stri
 							OldContent: oldContent,
 							ColStart:   colStart,
 							ColEnd:     colEnd,
+							Spans:      spans,
 						}, {
 							Type:       ChangeAddition,
 							OldLineNum: oldIdx + 1,

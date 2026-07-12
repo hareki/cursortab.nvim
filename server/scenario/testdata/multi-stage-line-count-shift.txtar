@@ -25,14 +25,14 @@ respond 1-7
 request-completion manual
 expect shown
   display:
-    | modification 2 replace_chars
+    | modification 2
     | addition 3 x2
 accept
 expect hidden target=9
 accept
 expect shown
   display:
-    | modification 9 replace_chars
+    | modification 9
 accept
 expect hidden target=none
   buffer:

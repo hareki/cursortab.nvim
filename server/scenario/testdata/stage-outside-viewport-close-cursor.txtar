@@ -24,7 +24,7 @@ expect hidden target=11 state=HasCursorTarget
 accept
 expect shown cursor=11:0
   display:
-    | modification 11 replace_chars
+    | modification 11 inline_diff
 accept
 expect hidden target=none
   buffer:

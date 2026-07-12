@@ -37,10 +37,9 @@ respond 1-14
 request-completion manual
 expect shown
 accept
-expect shown cursor=12:3
+expect shown cursor=12:6
   display:
-    | modification 13 replace_chars
-    | modification 14 replace_chars
+    | modification 13 x2
 accept
 expect hidden target=none
   buffer:

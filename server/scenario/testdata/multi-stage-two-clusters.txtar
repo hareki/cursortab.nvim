@@ -24,13 +24,13 @@ respond 1-7
 request-completion manual
 expect shown
   display:
-    | modification 6 replace_chars
+    | modification 6 inline_diff
 accept
 expect hidden target=2 state=HasCursorTarget
 accept
 expect shown
   display:
-    | modification 2 replace_chars
+    | modification 2 inline_diff
 accept
 expect hidden target=none
   buffer:

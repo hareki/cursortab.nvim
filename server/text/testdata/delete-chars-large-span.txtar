@@ -8,7 +8,7 @@ start REMOVED LARGE TEXT HERE end
 start end
 -- expected --
 stage @1 cursor=1:6
-  modification @1 1-1 delete_chars 6:30
+  modification @1 1-1 inline_diff 6:30->6:6
     + "start end"
     - "start REMOVED LARGE TEXT HERE end"
 

@@ -29,13 +29,13 @@ respond 10-10
 request-completion manual
 expect shown requests=1
   display:
-    | modification 2 replace_chars
+    | modification 2 inline_diff
 accept
 expect hidden target=6
 accept
 expect shown requests=2
   display:
-    | modification 6 replace_chars
+    | modification 6 inline_diff
 accept
 expect hidden target=10 state=HasCursorTarget
   buffer:
@@ -53,7 +53,7 @@ expect hidden target=10 state=HasCursorTarget
 accept
 expect shown
   display:
-    | modification 10 replace_chars
+    | modification 10 inline_diff
 accept
 expect hidden target=none
   buffer:

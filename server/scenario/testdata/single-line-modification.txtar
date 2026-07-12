@@ -13,7 +13,7 @@ respond 2-2
 request-completion manual
 expect shown requests=1
   display:
-    | modification 2
+    | modification 2 inline_diff
 accept
 expect hidden target=none
   buffer:
