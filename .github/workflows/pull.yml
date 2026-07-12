@@ -3,3 +3,6 @@ rules:
   - base: main
     upstream: cursortab:main
     mergeMethod: merge
+  - base: feat/inline-word-diff
+    upstream: cursortab:main
+    mergeMethod: merge
