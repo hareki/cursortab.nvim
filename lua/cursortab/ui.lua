@@ -130,6 +130,8 @@ local absolute_jump_buf = nil
 local completion_extmarks = {} -- Array of {buf, extmark_id} for cleanup
 ---@type WindowInfo[]
 local completion_windows = {} -- Array of {win_id, buf_id} for overlay window cleanup
+---@type integer|nil
+local addition_topfill_win = nil -- Window where render_addition set topfill to reveal fillers above the topline
 
 ---@class Group
 ---@field type string "modification" | "addition" | "deletion"
@@ -194,6 +196,14 @@ local function ensure_close_completion()
 			end)
 		end
 	end
+
+	-- Neovim keeps topfill even after the fillers' extmark is removed, so restore it explicitly
+	if addition_topfill_win and vim.api.nvim_win_is_valid(addition_topfill_win) then
+		pcall(vim.api.nvim_win_call, addition_topfill_win, function()
+			vim.fn.winrestview({ topfill = 0 })
+		end)
+	end
+	addition_topfill_win = nil
 
 	-- Reset state
 	completion_extmarks = {}
@@ -397,6 +407,9 @@ local function create_overlay_window(parent_win, buffer_line, col, content, synt
 			window_relative_line = buffer_line - (first_visible_line - 1) + row_offset
 		end
 	end
+	-- Never render above the first text row: a negative row lands on the winbar
+	-- (or bleeds out of the window) e.g. when topfill got clamped in a short window.
+	window_relative_line = math.max(0, window_relative_line)
 
 	-- Create floating window
 	local overlay_win = vim.api.nvim_open_win(overlay_buf, false, {
@@ -777,6 +790,13 @@ local function render_addition(group, nvim_line, current_win, current_buf, synta
 			virt_lines = virt_lines_array,
 			virt_lines_above = true,
 		})
+		-- Fillers above the topline only render when the window's topfill is set;
+		-- without it the overlay row would go negative and cover the winbar.
+		local topline = vim.fn.getwininfo(current_win)[1].topline
+		if nvim_line + 1 == topline then
+			vim.fn.winrestview({ topline = topline, topfill = line_count })
+			addition_topfill_win = current_win
+		end
 		overlay_buffer_line = nvim_line
 		overlay_row_offset = -line_count
 	end
