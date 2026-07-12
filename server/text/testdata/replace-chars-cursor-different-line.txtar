@@ -10,7 +10,7 @@ line one
 function bar() {
 -- expected --
 stage @2 cursor=1:12
-  modification @2 1-1 replace_chars 9:12
+  modification @2 1-1 inline_diff 9:12->9:12
     + "function bar() {"
     - "function foo() {"
 

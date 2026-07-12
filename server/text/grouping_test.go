@@ -8,11 +8,12 @@ import (
 func TestGroupChanges_SingleModification(t *testing.T) {
 	changes := map[int]LineChange{
 		1: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello there",
 			OldContent: "Hello world",
 			ColStart:   6,
 			ColEnd:     11,
+			Spans:      []InlineSpan{{OldStart: 6, OldEnd: 11, NewStart: 6, NewEnd: 11}},
 		},
 	}
 
@@ -22,9 +23,11 @@ func TestGroupChanges_SingleModification(t *testing.T) {
 	assert.Equal(t, "modification", groups[0].Type, "group type")
 	assert.Equal(t, 1, groups[0].StartLine, "start line")
 	assert.Equal(t, 1, groups[0].EndLine, "end line")
-	assert.Equal(t, "replace_chars", groups[0].RenderHint, "render hint")
+	assert.Equal(t, "inline_diff", groups[0].RenderHint, "render hint")
 	assert.Equal(t, 6, groups[0].ColStart, "col start")
 	assert.Equal(t, 11, groups[0].ColEnd, "col end")
+	assert.Equal(t, 1, len(groups[0].Spans), "spans carried onto group")
+	assert.Equal(t, InlineSpan{OldStart: 6, OldEnd: 11, NewStart: 6, NewEnd: 11}, groups[0].Spans[0], "span")
 }
 
 func TestGroupChanges_SingleAddition(t *testing.T) {
@@ -158,17 +161,17 @@ func TestGroupChanges_AppendCharsHint(t *testing.T) {
 func TestGroupChanges_MultiLineWithDifferentColumns(t *testing.T) {
 	// Changes with render hints are never merged - each gets its own group
 	changes := map[int]LineChange{
-		1: {Type: ChangeReplaceChars, Content: "a", OldContent: "b", ColStart: 0, ColEnd: 1},
-		2: {Type: ChangeReplaceChars, Content: "c", OldContent: "d", ColStart: 5, ColEnd: 6},
+		1: {Type: ChangeInlineDiff, Content: "a", OldContent: "b", ColStart: 0, ColEnd: 1},
+		2: {Type: ChangeInlineDiff, Content: "c", OldContent: "d", ColStart: 5, ColEnd: 6},
 	}
 
 	groups := GroupChanges(changes)
 
 	assert.Equal(t, 2, len(groups), "hinted changes stay separate")
-	assert.Equal(t, "replace_chars", groups[0].RenderHint, "first group has hint")
+	assert.Equal(t, "inline_diff", groups[0].RenderHint, "first group has hint")
 	assert.Equal(t, 0, groups[0].ColStart, "first group col start")
 	assert.Equal(t, 1, groups[0].ColEnd, "first group col end")
-	assert.Equal(t, "replace_chars", groups[1].RenderHint, "second group has hint")
+	assert.Equal(t, "inline_diff", groups[1].RenderHint, "second group has hint")
 	assert.Equal(t, 5, groups[1].ColStart, "second group col start")
 	assert.Equal(t, 6, groups[1].ColEnd, "second group col end")
 }
@@ -177,16 +180,16 @@ func TestGroupChanges_MultiLineWithIdenticalColumns(t *testing.T) {
 	// Changes with render hints are never merged - each gets its own single-line group
 	// This allows the Lua renderer to apply char-level rendering to each line individually
 	changes := map[int]LineChange{
-		1: {Type: ChangeReplaceChars, Content: "application.route()", OldContent: "app.route()", ColStart: 3, ColEnd: 11},
-		2: {Type: ChangeReplaceChars, Content: "application.route()", OldContent: "app.route()", ColStart: 3, ColEnd: 11},
-		3: {Type: ChangeReplaceChars, Content: "application.route()", OldContent: "app.route()", ColStart: 3, ColEnd: 11},
+		1: {Type: ChangeInlineDiff, Content: "application.route()", OldContent: "app.route()", ColStart: 3, ColEnd: 11},
+		2: {Type: ChangeInlineDiff, Content: "application.route()", OldContent: "app.route()", ColStart: 3, ColEnd: 11},
+		3: {Type: ChangeInlineDiff, Content: "application.route()", OldContent: "app.route()", ColStart: 3, ColEnd: 11},
 	}
 
 	groups := GroupChanges(changes)
 
 	assert.Equal(t, 3, len(groups), "each hinted change gets its own group")
 	for i, group := range groups {
-		assert.Equal(t, "replace_chars", group.RenderHint, "group has hint")
+		assert.Equal(t, "inline_diff", group.RenderHint, "group has hint")
 		assert.Equal(t, 3, group.ColStart, "col start")
 		assert.Equal(t, 11, group.ColEnd, "col end")
 		assert.Equal(t, i+1, group.StartLine, "start line")
@@ -197,7 +200,7 @@ func TestGroupChanges_MultiLineWithIdenticalColumns(t *testing.T) {
 func TestGroupChanges_MultiLineMixedHints(t *testing.T) {
 	// Multi-line groups with different change types should clear RenderHint
 	changes := map[int]LineChange{
-		1: {Type: ChangeReplaceChars, Content: "a", OldContent: "b", ColStart: 0, ColEnd: 1},
+		1: {Type: ChangeInlineDiff, Content: "a", OldContent: "b", ColStart: 0, ColEnd: 1},
 		2: {Type: ChangeAppendChars, Content: "cd", OldContent: "c", ColStart: 1, ColEnd: 2},
 	}
 
@@ -212,7 +215,11 @@ func TestGroupChanges_MultiLineMixedHints(t *testing.T) {
 // A multi-line group cannot use a single-line hint, so it is cleared on merge.
 func TestGroupChanges_ConsecutiveModificationsWithRenderHint(t *testing.T) {
 	changes := map[int]LineChange{
-		1: {Type: ChangeReplaceChars, Content: "def foo_new(data):", OldContent: "def foo_ol(data):", ColStart: 8, ColEnd: 15},
+		1: {
+			Type: ChangeInlineDiff, Content: "def foo_new(data):", OldContent: "def foo_ol(data):",
+			ColStart: 8, ColEnd: 15,
+			Spans: []InlineSpan{{OldStart: 4, OldEnd: 10, NewStart: 4, NewEnd: 11}},
+		},
 		2: {Type: ChangeModification, Content: "    return x, y", OldContent: "    return x"},
 	}
 
@@ -223,8 +230,28 @@ func TestGroupChanges_ConsecutiveModificationsWithRenderHint(t *testing.T) {
 	assert.Equal(t, 1, groups[0].StartLine, "start line")
 	assert.Equal(t, 2, groups[0].EndLine, "end line")
 	assert.Equal(t, "", groups[0].RenderHint, "render hint cleared for multi-line group")
+	assert.Nil(t, groups[0].Spans, "spans cleared for multi-line group")
 	assert.Equal(t, 2, len(groups[0].Lines), "both new lines present")
 	assert.Equal(t, 2, len(groups[0].OldLines), "both old lines present")
+}
+
+func TestCopyGroupsDeepCopiesSpans(t *testing.T) {
+	original := []*Group{
+		{
+			Type:       "modification",
+			StartLine:  1,
+			EndLine:    1,
+			RenderHint: "inline_diff",
+			Lines:      []string{"Hello there"},
+			OldLines:   []string{"Hello world"},
+			Spans:      []InlineSpan{{OldStart: 6, OldEnd: 11, NewStart: 6, NewEnd: 11}},
+		},
+	}
+
+	copied := CopyGroups(original)
+	copied[0].Spans[0].OldStart = 99
+
+	assert.Equal(t, 6, original[0].Spans[0].OldStart, "mutating the copy must not affect the original")
 }
 
 func TestCalculateCursorPosition_Modification(t *testing.T) {
@@ -320,16 +347,17 @@ func TestCalculateCursorPosition_AppendChars(t *testing.T) {
 	assert.Equal(t, 19, col, "cursor at end of change, not end of line (21)")
 }
 
-func TestCalculateCursorPosition_ReplaceChars(t *testing.T) {
+func TestCalculateCursorPosition_InlineDiffReplacement(t *testing.T) {
 	// app.route() -> application.route()
 	// Cursor should be after "application", not at end of line
 	changes := map[int]LineChange{
 		1: {
-			Type:       ChangeReplaceChars,
+			Type:       ChangeInlineDiff,
 			Content:    "application.route()",
 			OldContent: "app.route()",
 			ColStart:   0,
 			ColEnd:     11, // end of "application"
+			Spans:      []InlineSpan{{OldStart: 0, OldEnd: 3, NewStart: 0, NewEnd: 11}},
 		},
 	}
 	newLines := []string{"application.route()"}
@@ -340,26 +368,26 @@ func TestCalculateCursorPosition_ReplaceChars(t *testing.T) {
 	assert.Equal(t, 11, col, "cursor at end of replacement, not end of line (19)")
 }
 
-func TestCalculateCursorPosition_DeleteChars(t *testing.T) {
+func TestCalculateCursorPosition_InlineDiffDeletion(t *testing.T) {
 	// "Hello world John" -> "Hello John"
-	// Deleted "world " at position 6
-	// ColEnd=12 is in OLD coordinates (6 + len("world "))
-	// Cursor should be at ColStart (deletion point), not ColEnd
+	// Deleted "world " at position 6; the envelope is empty in new-line
+	// coordinates, so ColEnd is the deletion point.
 	changes := map[int]LineChange{
 		1: {
-			Type:       ChangeDeleteChars,
+			Type:       ChangeInlineDiff,
 			Content:    "Hello John",
 			OldContent: "Hello world John",
-			ColStart:   6,  // position where deletion occurred
-			ColEnd:     12, // end of deleted text in OLD coordinates
+			ColStart:   6,
+			ColEnd:     6,
+			Spans:      []InlineSpan{{OldStart: 6, OldEnd: 12, NewStart: 6, NewEnd: 6}},
 		},
 	}
-	newLines := []string{"Hello John"} // len=10, less than ColEnd=12
+	newLines := []string{"Hello John"}
 
 	line, col := CalculateCursorPosition(changes, newLines)
 
 	assert.Equal(t, 1, line, "cursor line")
-	assert.Equal(t, 6, col, "cursor at deletion point (ColStart), not ColEnd")
+	assert.Equal(t, 6, col, "cursor at deletion point")
 }
 
 func TestCalculateCursorPosition_AppendCharsAtLineEnd(t *testing.T) {
@@ -477,7 +505,7 @@ func TestGroupsMustReflectActualBufferState(t *testing.T) {
 
 	assert.Equal(t, 1, len(secondDiff.Changes), "second diff: 1 change")
 	change := secondDiff.Changes[0]
-	isModification := change.Type == ChangeModification || change.Type == ChangeReplaceChars
+	isModification := change.Type == ChangeModification || change.Type == ChangeInlineDiff
 	assert.True(t, isModification, "second diff: modification type")
 	assert.True(t, change.OldContent != "", "modification has old content")
 
@@ -545,63 +573,30 @@ func TestValidateRenderHintsForCursor_IgnoresDifferentLine(t *testing.T) {
 	assert.Equal(t, "append_chars", groups[0].RenderHint, "should not affect groups on different lines")
 }
 
-func TestValidateRenderHintsForCursor_KeepsReplaceCharsAtCursor(t *testing.T) {
-	// Scenario: cursor is at column 5, replace_chars starts at column 5
-	// This should be kept because cursor is at the change start (not past it)
-	groups := []*Group{
-		{
-			Type:       "modification",
-			RenderHint: "replace_chars",
-			BufferLine: 10,
-			ColStart:   5,
-			ColEnd:     10,
-		},
+func TestValidateRenderHintsForCursor_NeverDowngradesInlineDiff(t *testing.T) {
+	// inline_diff renders with plain extmarks that never hide the cursor, so
+	// the hint is kept regardless of where the cursor sits on the line.
+	for _, cursorCol := range []int{0, 5, 8, 20} {
+		groups := []*Group{
+			{
+				Type:       "modification",
+				RenderHint: "inline_diff",
+				BufferLine: 10,
+				ColStart:   3,
+				ColEnd:     10,
+				Spans:      []InlineSpan{{OldStart: 3, OldEnd: 8, NewStart: 3, NewEnd: 10}},
+			},
+		}
+
+		ValidateRenderHintsForCursor(groups, 10, cursorCol)
+
+		assert.Equal(t, "inline_diff", groups[0].RenderHint, "inline_diff kept at any cursor col")
 	}
-
-	ValidateRenderHintsForCursor(groups, 10, 5) // cursor at row 10, col 5
-
-	assert.Equal(t, "replace_chars", groups[0].RenderHint, "should keep replace_chars when ColStart == cursorCol")
 }
 
-func TestValidateRenderHintsForCursor_DowngradesReplaceCharsBeforeCursor(t *testing.T) {
-	// Scenario: cursor is at column 8, replace_chars starts at column 3
-	// This should be downgraded because cursor is past the change start
-	groups := []*Group{
-		{
-			Type:       "modification",
-			RenderHint: "replace_chars",
-			BufferLine: 10,
-			ColStart:   3,
-			ColEnd:     10,
-		},
-	}
-
-	ValidateRenderHintsForCursor(groups, 10, 8) // cursor at row 10, col 8
-
-	assert.Equal(t, "", groups[0].RenderHint, "should downgrade replace_chars when ColStart < cursorCol")
-}
-
-func TestValidateRenderHintsForCursor_KeepsReplaceCharsBeforeCursor(t *testing.T) {
-	// Scenario: cursor is at column 2, replace_chars starts at column 5
-	// This should NOT be downgraded because cursor is before the change
-	groups := []*Group{
-		{
-			Type:       "modification",
-			RenderHint: "replace_chars",
-			BufferLine: 10,
-			ColStart:   5,
-			ColEnd:     10,
-		},
-	}
-
-	ValidateRenderHintsForCursor(groups, 10, 2) // cursor at row 10, col 2
-
-	assert.Equal(t, "replace_chars", groups[0].RenderHint, "should keep replace_chars when ColStart > cursorCol")
-}
-
-func TestValidateRenderHintsForCursor_AppendVsReplaceAtExactPosition(t *testing.T) {
-	// At exact cursor position (col 5), both hints are kept because
-	// cursor is at the change start, not past it
+func TestValidateRenderHintsForCursor_AppendAtExactPosition(t *testing.T) {
+	// At exact cursor position (col 5), append_chars is kept because the
+	// cursor is at the change start, not past it.
 	appendGroup := &Group{
 		Type:       "modification",
 		RenderHint: "append_chars",
@@ -609,19 +604,10 @@ func TestValidateRenderHintsForCursor_AppendVsReplaceAtExactPosition(t *testing.
 		ColStart:   5,
 		ColEnd:     10,
 	}
-	replaceGroup := &Group{
-		Type:       "modification",
-		RenderHint: "replace_chars",
-		BufferLine: 10,
-		ColStart:   5,
-		ColEnd:     10,
-	}
 
 	ValidateRenderHintsForCursor([]*Group{appendGroup}, 10, 5)
-	ValidateRenderHintsForCursor([]*Group{replaceGroup}, 10, 5)
 
 	assert.Equal(t, "append_chars", appendGroup.RenderHint, "append_chars at exact cursor position should keep hint")
-	assert.Equal(t, "replace_chars", replaceGroup.RenderHint, "replace_chars at exact cursor position should keep hint")
 }
 
 func TestFinalizeStageGroups_AppendCharsOnNonCursorLine(t *testing.T) {
@@ -735,6 +721,58 @@ func TestToLuaFormat_PureInsertionCursorFromGroups(t *testing.T) {
 
 	assert.Equal(t, 1, result["cursor_line"], "cursor_line should be 1 from addition group")
 	assert.Equal(t, 0, result["cursor_col"], "cursor_col should be 0 for empty line")
+}
+
+func TestToLuaFormat_InlineDiffEmitsSpans(t *testing.T) {
+	stage := &Stage{
+		Groups: []*Group{
+			{
+				Type: "modification", StartLine: 1, EndLine: 1, BufferLine: 4,
+				Lines: []string{"Hello there"}, OldLines: []string{"Hello world"},
+				RenderHint: "inline_diff", ColStart: 6, ColEnd: 11,
+				Spans: []InlineSpan{{OldStart: 6, OldEnd: 11, NewStart: 6, NewEnd: 11}},
+			},
+		},
+		Lines: []string{"Hello there"},
+	}
+
+	result := ToLuaFormat(stage, 4)
+
+	group := result["groups"].([]map[string]any)[0]
+	assert.Equal(t, "inline_diff", group["render_hint"], "render hint")
+
+	_, hasColStart := group["col_start"]
+	assert.False(t, hasColStart, "inline_diff omits group-level col_start")
+
+	spans := group["spans"].([]map[string]any)
+	assert.Equal(t, 1, len(spans), "span count")
+	assert.Equal(t, 6, spans[0]["col_start"], "span col_start")
+	assert.Equal(t, 11, spans[0]["col_end"], "span col_end")
+	assert.Equal(t, 6, spans[0]["new_col_start"], "span new_col_start")
+	assert.Equal(t, 11, spans[0]["new_col_end"], "span new_col_end")
+}
+
+func TestToLuaFormat_AppendCharsEmitsCols(t *testing.T) {
+	stage := &Stage{
+		Groups: []*Group{
+			{
+				Type: "modification", StartLine: 1, EndLine: 1, BufferLine: 2,
+				Lines: []string{"hello world"}, OldLines: []string{"hello"},
+				RenderHint: "append_chars", ColStart: 5, ColEnd: 11,
+			},
+		},
+		Lines: []string{"hello world"},
+	}
+
+	result := ToLuaFormat(stage, 2)
+
+	group := result["groups"].([]map[string]any)[0]
+	assert.Equal(t, "append_chars", group["render_hint"], "render hint")
+	assert.Equal(t, 5, group["col_start"], "col_start")
+	assert.Equal(t, 11, group["col_end"], "col_end")
+
+	_, hasSpans := group["spans"]
+	assert.False(t, hasSpans, "append_chars has no spans")
 }
 
 func TestToLuaFormat_UsesPrecomputedCursor(t *testing.T) {

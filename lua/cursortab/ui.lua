@@ -2,6 +2,7 @@
 
 local config = require("cursortab.config")
 local daemon = require("cursortab.daemon")
+local treesitter = require("cursortab.treesitter")
 
 ---@class UIModule
 local ui = {}
@@ -133,6 +134,12 @@ local completion_windows = {} -- Array of {win_id, buf_id} for overlay window cl
 ---@type integer|nil
 local addition_topfill_win = nil -- Window where render_addition set topfill to reveal fillers above the topline
 
+---@class InlineDiffSpan
+---@field col_start integer 0-based byte col in the old line, delete range start
+---@field col_end integer Exclusive; equals col_start for a pure insertion
+---@field new_col_start integer 0-based byte col of the inserted text in the new line
+---@field new_col_end integer Exclusive; equals new_col_start for a pure deletion
+
 ---@class Group
 ---@field type string "modification" | "addition" | "deletion"
 ---@field start_line integer 1-indexed, relative to diff content
@@ -140,9 +147,10 @@ local addition_topfill_win = nil -- Window where render_addition set topfill to 
 ---@field buffer_line integer 1-indexed absolute buffer position for rendering
 ---@field lines string[] New content
 ---@field old_lines string[] Old content (modifications only)
----@field render_hint string|nil "append_chars" | "replace_chars" | "delete_chars" | nil
----@field col_start integer|nil For character-level hints
----@field col_end integer|nil For character-level hints
+---@field render_hint string|nil "append_chars" | "inline_diff" | "stacked" | nil
+---@field col_start integer|nil For append_chars
+---@field col_end integer|nil For append_chars
+---@field spans InlineDiffSpan[]|nil Word-level edit spans (inline_diff only)
 
 ---@class DiffResult
 ---@field groups Group[] Array of groups for rendering
@@ -611,63 +619,41 @@ local function render_append_chars(group, nvim_line, current_win, current_buf, s
 	return is_first_append
 end
 
--- Render delete_chars: highlight the column range to be deleted
+-- Render inline_diff: highlight deleted spans on the real line and show
+-- inserted text as inline virtual text with treesitter syntax highlighting
 ---@param group Group
 ---@param nvim_line integer 0-indexed line number
 ---@param current_buf integer
----@param ns_id integer
-local function render_delete_chars(group, nvim_line, current_buf, ns_id)
-	local line_content = vim.api.nvim_buf_get_lines(current_buf, nvim_line, nvim_line + 1, false)[1] or ""
-	local line_length = #line_content
-
-	local col_start = math.max(0, math.min(group.col_start or 0, line_length))
-	local col_end = math.max(col_start, math.min(group.col_end or 0, line_length))
-
-	if col_end > col_start then
-		local extmark_id = vim.api.nvim_buf_set_extmark(current_buf, ns_id, nvim_line, col_start, {
-			end_col = col_end,
-			hl_group = "CursorTabDeletion",
-			hl_mode = "combine",
-		})
-		table.insert(completion_extmarks, { buf = current_buf, extmark_id = extmark_id })
-	end
-end
-
--- Render replace_chars: overlay entire line with highlight on changed portion
----@param group Group
----@param nvim_line integer 0-indexed line number
----@param current_win integer
 ---@param syntax_ft string
 ---@param ns_id integer
-local function render_replace_chars(group, nvim_line, current_win, syntax_ft, ns_id)
-	local content = group.lines[1] or ""
-	local old_content = (group.old_lines and group.old_lines[1]) or ""
-	local original_line_width = vim.fn.strdisplaywidth(old_content)
+local function render_inline_diff(group, nvim_line, current_buf, syntax_ft, ns_id)
+	local line_content = vim.api.nvim_buf_get_lines(current_buf, nvim_line, nvim_line + 1, false)[1] or ""
+	local line_length = #line_content
+	local new_line = group.lines[1] or ""
+	local chunks = treesitter.line_chunks(new_line, syntax_ft)
 
-	if content ~= "" then
-		local overlay_win, overlay_buf, bytes_trimmed = create_overlay_window(
-			current_win,
-			nvim_line,
-			0,
-			content,
-			syntax_ft,
-			{
-				min_width = original_line_width,
-				ns_id = ns_id,
-			}
-		)
-		table.insert(completion_windows, { win_id = overlay_win, buf_id = overlay_buf })
+	for _, span in ipairs(group.spans or {}) do
+		local col_start = math.max(0, math.min(span.col_start or 0, line_length))
+		local col_end = math.max(col_start, math.min(span.col_end or 0, line_length))
 
-		-- Highlight the changed portion
-		local ov_line = vim.api.nvim_buf_get_lines(overlay_buf, 0, 1, false)[1] or ""
-		local ov_len = #ov_line
-		local start_col = math.max(0, (group.col_start or 0) - (bytes_trimmed or 0))
-		local end_col = math.max(start_col, math.min(ov_len, (group.col_end or start_col) - (bytes_trimmed or 0)))
-		if end_col > start_col then
-			vim.api.nvim_buf_set_extmark(overlay_buf, ns_id, 0, start_col, {
-				end_col = end_col,
-				hl_group = "CursorTabAddition",
+		if col_end > col_start then
+			local extmark_id = vim.api.nvim_buf_set_extmark(current_buf, ns_id, nvim_line, col_start, {
+				end_col = col_end,
+				hl_group = "CursorTabDeletion",
+				hl_mode = "combine",
 			})
+			table.insert(completion_extmarks, { buf = current_buf, extmark_id = extmark_id })
+		end
+
+		local new_start = span.new_col_start or 0
+		local new_end = span.new_col_end or 0
+		if new_end > new_start then
+			local extmark_id = vim.api.nvim_buf_set_extmark(current_buf, ns_id, nvim_line, col_end, {
+				virt_text = treesitter.slice_chunks(chunks, new_line, new_start, new_end, "CursorTabAddition"),
+				virt_text_pos = "inline",
+				hl_mode = "combine",
+			})
+			table.insert(completion_extmarks, { buf = current_buf, extmark_id = extmark_id })
 		end
 	end
 end
@@ -877,9 +863,7 @@ local function show_completion(diff_result)
 
 		-- Handle character-level render hints (single-line only)
 		-- "stacked" is a layout hint for modifications, not a character-level hint
-		local is_char_hint = group.render_hint == "append_chars"
-			or group.render_hint == "replace_chars"
-			or group.render_hint == "delete_chars"
+		local is_char_hint = group.render_hint == "append_chars" or group.render_hint == "inline_diff"
 		if is_single_line and is_char_hint then
 			if group.render_hint == "append_chars" then
 				local is_first = not found_first_append
@@ -887,10 +871,8 @@ local function show_completion(diff_result)
 				if is_first then
 					found_first_append = true
 				end
-			elseif group.render_hint == "replace_chars" then
-				render_replace_chars(group, nvim_line, current_win, syntax_ft, ns_id)
-			elseif group.render_hint == "delete_chars" then
-				render_delete_chars(group, nvim_line, current_buf, ns_id)
+			else
+				render_inline_diff(group, nvim_line, current_buf, syntax_ft, ns_id)
 			end
 		elseif group.type == "modification" then
 			render_modification(group, nvim_line, current_win, current_buf, syntax_ft, ns_id)

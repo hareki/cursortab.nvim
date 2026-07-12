@@ -28,10 +28,10 @@ line 10
 mod_b_new
 -- expected --
 stage @1 cursor=11:9
-  modification @1 1-1 replace_chars 6:9
+  modification @1 1-1
     + "mod_a_new"
     - "mod_a_old"
-  modification @11 11-11 replace_chars 6:9
+  modification @11 11-11
     + "mod_b_new"
     - "mod_b_old"
 

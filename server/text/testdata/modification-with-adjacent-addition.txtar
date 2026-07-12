@@ -9,7 +9,7 @@ modified
 added after
 -- expected --
 stage @1 cursor=2:11
-  modification @1 1-1 replace_chars 0:7
+  modification @1 1-1
     + "modified"
     - "old"
   addition @2 2-2

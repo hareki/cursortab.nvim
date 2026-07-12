@@ -845,7 +845,7 @@ func TestIncrementalDiffBuilder_LargeFile(t *testing.T) {
 
 	// Should be recorded as append_chars (filling empty line), addition, or modification
 	assert.True(t, change.Type == ChangeAddition || change.Type == ChangeModification ||
-		change.Type == ChangeReplaceChars || change.Type == ChangeAppendChars,
+		change.Type == ChangeInlineDiff || change.Type == ChangeAppendChars,
 		"expected valid change type")
 }
 
@@ -1813,8 +1813,10 @@ func TestIncrementalStageBuilder_WhitespaceLineExpansion(t *testing.T) {
 
 	stage := result.Stages[0]
 
-	// The two modifications have different render hints (append_chars and replace_chars),
-	// so they are separate groups rather than one multi-line modification group.
+	// The whitespace line's replacement is mostly inserted text, which exceeds
+	// the inline insert-ratio gate, so it is an unhinted modification. Being
+	// consecutive with the empty-line modification, both merge into one
+	// multi-line modification group (which clears the single-line hint).
 	var modGroups []*Group
 	for _, g := range stage.Groups {
 		if g.Type == "modification" {
@@ -1822,15 +1824,14 @@ func TestIncrementalStageBuilder_WhitespaceLineExpansion(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 2, len(modGroups), "should have two modification groups")
-	assert.Equal(t, 5, modGroups[0].BufferLine, "first modification at buffer line 5")
-	assert.Equal(t, "append_chars", modGroups[0].RenderHint, "empty line gets append_chars")
-	assert.Equal(t, 6, modGroups[1].BufferLine, "second modification at buffer line 6")
-	assert.Equal(t, "replace_chars", modGroups[1].RenderHint, "whitespace line gets replace_chars")
+	assert.Equal(t, 1, len(modGroups), "should have one modification group")
+	assert.Equal(t, 5, modGroups[0].BufferLine, "modification group starts at buffer line 5")
+	assert.Equal(t, 2, len(modGroups[0].Lines), "covers both modified lines")
+	assert.Equal(t, "", modGroups[0].RenderHint, "multi-line group has no hint")
 
-	// Additions after the modification groups should be anchored below them
+	// Additions after the modification group should be anchored below it
 	for _, g := range stage.Groups {
-		if g.Type == "addition" && g.StartLine > modGroups[1].StartLine {
+		if g.Type == "addition" && g.StartLine > modGroups[0].EndLine {
 			assert.True(t, g.BufferLine >= 6,
 				"additions after modification block should be anchored at or below buffer line 6")
 		}

@@ -15,7 +15,7 @@ function hello() {
 }
 -- expected --
 stage @2 cursor=3:30
-  modification @2 1-1 replace_chars 17:20
+  modification @2 1-1 inline_diff 17:20->17:20
     + "    console.log(\"new message\");"
     - "    console.log(\"old message\");"
   addition @4 3-3

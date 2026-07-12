@@ -838,7 +838,7 @@ func textEditForCharGroup(group *text.Group) (bufferTextEdit, bool) {
 		return bufferTextEdit{}, false
 	}
 	switch group.RenderHint {
-	case "append_chars", "replace_chars", "delete_chars":
+	case "append_chars", "inline_diff":
 	default:
 		return bufferTextEdit{}, false
 	}

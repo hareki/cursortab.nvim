@@ -22,7 +22,7 @@ viewportBottom: 50
 }
 -- expected --
 stage @5 cursor=1:22
-  modification @9 1-1 delete_chars 22:33
+  modification @9 1-1 inline_diff 22:33->22:22
     + "  return article.tags.length;"
     - "  return article.tags.split(\",\").length;"
   deletion @5 2-5

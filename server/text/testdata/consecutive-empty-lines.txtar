@@ -17,7 +17,7 @@ line5
 stage @4 cursor=2:5
   addition @4 1-1
     + ""
-  modification @4 2-2 replace_chars 4:5
+  modification @4 2-2
     + "line5"
     - "line4"
 

@@ -80,7 +80,7 @@ func stagesFromEngine(stages []*text.Stage) []e2e.StageInfo {
 			CursorCol:  s.CursorCol,
 		}
 		for _, g := range s.Groups {
-			si.Groups = append(si.Groups, e2e.GroupInfo{
+			gi := e2e.GroupInfo{
 				Type:       g.Type,
 				StartLine:  g.StartLine,
 				EndLine:    g.EndLine,
@@ -89,7 +89,16 @@ func stagesFromEngine(stages []*text.Stage) []e2e.StageInfo {
 				ColStart:   g.ColStart,
 				ColEnd:     g.ColEnd,
 				Lines:      g.Lines,
-			})
+			}
+			for _, sp := range g.Spans {
+				gi.Spans = append(gi.Spans, e2e.SpanInfo{
+					ColStart:    sp.OldStart,
+					ColEnd:      sp.OldEnd,
+					NewColStart: sp.NewStart,
+					NewColEnd:   sp.NewEnd,
+				})
+			}
+			si.Groups = append(si.Groups, gi)
 		}
 		result = append(result, si)
 	}

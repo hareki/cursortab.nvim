@@ -16,10 +16,10 @@ function test() {
 }
 -- expected --
 stage @2 cursor=3:14
-  modification @2 1-1 replace_chars 13:14
+  modification @2 1-1 inline_diff 12:13->12:14
     + "    let x = 10;"
     - "    let x = 1;"
-  modification @4 3-3 replace_chars 13:14
+  modification @4 3-3 inline_diff 12:13->12:14
     + "    let y = 20;"
     - "    let y = 2;"
 

@@ -68,18 +68,18 @@ content line 30
 
 -- expected --
 stage @10 cursor=2:7
-  modification @10 1-1 replace_chars 0:7
+  modification @10 1-1 inline_diff 0:7->0:7
     + "updated line 10"
     - "content line 10"
-  modification @11 2-2 replace_chars 0:7
+  modification @11 2-2 inline_diff 0:7->0:7
     + "updated line 11"
     - "content line 11"
 
 stage @25 cursor=2:7
-  modification @25 1-1 replace_chars 0:7
+  modification @25 1-1 inline_diff 0:7->0:7
     + "updated line 25"
     - "content line 25"
-  modification @26 2-2 replace_chars 0:7
+  modification @26 2-2 inline_diff 0:7->0:7
     + "updated line 26"
     - "content line 26"
 

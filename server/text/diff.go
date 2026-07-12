@@ -27,8 +27,7 @@ const (
 	ChangeAddition
 	ChangeModification
 	ChangeAppendChars
-	ChangeDeleteChars
-	ChangeReplaceChars
+	ChangeInlineDiff
 )
 
 // String returns the string representation of ChangeType
@@ -42,10 +41,8 @@ func (ct ChangeType) String() string {
 		return "modification"
 	case ChangeAppendChars:
 		return "append_chars"
-	case ChangeDeleteChars:
-		return "delete_chars"
-	case ChangeReplaceChars:
-		return "replace_chars"
+	case ChangeInlineDiff:
+		return "inline_diff"
 	default:
 		return "unknown"
 	}
@@ -57,10 +54,8 @@ func (ct ChangeType) RenderHint() string {
 	switch ct {
 	case ChangeAppendChars:
 		return "append_chars"
-	case ChangeDeleteChars:
-		return "delete_chars"
-	case ChangeReplaceChars:
-		return "replace_chars"
+	case ChangeInlineDiff:
+		return "inline_diff"
 	default:
 		return ""
 	}
@@ -80,7 +75,7 @@ func (ct ChangeType) GroupType() string {
 
 // IsCharacterLevel returns true if this is a character-level change type.
 func (ct ChangeType) IsCharacterLevel() bool {
-	return ct == ChangeAppendChars || ct == ChangeDeleteChars || ct == ChangeReplaceChars
+	return ct == ChangeAppendChars || ct == ChangeInlineDiff
 }
 
 // LineChange represents a line-level change operation
@@ -90,8 +85,14 @@ type LineChange struct {
 	NewLineNum int    // Position in new text (1-indexed), -1 if pure deletion
 	Content    string // new content
 	OldContent string // For modifications to compare changes
-	ColStart   int    // Start column (0-based) for character-level changes
-	ColEnd     int    // End column (0-based) for character-level changes
+	// ColStart/ColEnd delimit the changed byte envelope for character-level
+	// changes. For ChangeAppendChars: [len(old), len(new)). For
+	// ChangeInlineDiff: the ChangedByteSpan envelope in new-line coordinates.
+	ColStart int
+	ColEnd   int
+	// Spans holds the word-level edits for ChangeInlineDiff, sorted and
+	// non-overlapping; nil for all other change types.
+	Spans []InlineSpan
 }
 
 // LineMapping tracks correspondence between new and old line coordinates.
@@ -213,7 +214,7 @@ func (r *DiffResult) addModification(oldLineNum, newLineNum int, oldContent, new
 	if oldContent == newContent {
 		return
 	}
-	changeType, colStart, colEnd := categorizeLineChangeWithColumns(oldContent, newContent)
+	changeType, colStart, colEnd, spans := categorizeLineChange(oldContent, newContent)
 	r.Changes = append(r.Changes, LineChange{
 		Type:       changeType,
 		OldLineNum: oldLineNum,
@@ -222,6 +223,7 @@ func (r *DiffResult) addModification(oldLineNum, newLineNum int, oldContent, new
 		OldContent: oldContent,
 		ColStart:   colStart,
 		ColEnd:     colEnd,
+		Spans:      spans,
 	})
 }
 
@@ -579,36 +581,25 @@ func ChangedByteSpan(oldLine, newLine string) (start, oldEnd, newEnd int) {
 	return start, oldEnd, newEnd
 }
 
-// categorizeLineChangeWithColumns determines the type of change between two lines
-// using common prefix/suffix analysis to find the single contiguous changed span.
-func categorizeLineChangeWithColumns(oldLine, newLine string) (ChangeType, int, int) {
+// categorizeLineChange classifies a modified line pair. Pure appends stay
+// ChangeAppendChars (they power ghost-text rendering). Everything else is
+// word-diffed: when the diff passes the insert-ratio gate the change becomes
+// ChangeInlineDiff carrying the spans, with ColStart/ColEnd holding the
+// ChangedByteSpan envelope in new-line coordinates. Otherwise it falls back to
+// a full-line ChangeModification.
+func categorizeLineChange(oldLine, newLine string) (ChangeType, int, int, []InlineSpan) {
 	if strings.HasPrefix(newLine, oldLine) {
-		return ChangeAppendChars, len(oldLine), len(newLine)
+		return ChangeAppendChars, len(oldLine), len(newLine), nil
 	}
 
-	changeStart, oldEnd, newEnd := ChangedByteSpan(oldLine, newLine)
+	changeStart, _, newEnd := ChangedByteSpan(oldLine, newLine)
 
-	oldMiddle := oldEnd - changeStart
-	newMiddle := newEnd - changeStart
-
-	if changeStart == 0 && oldEnd == len(oldLine) && newEnd == len(newLine) {
-		return ChangeModification, 0, 0
+	spans := InlineDiffSpans(oldLine, newLine)
+	if len(spans) > 0 && inlineInsertRatio(spans, newLine) < InlineMaxInsertRatio {
+		return ChangeInlineDiff, changeStart, newEnd, spans
 	}
 
-	if newMiddle == 0 && oldMiddle > 0 {
-		return ChangeDeleteChars, changeStart, oldEnd
-	}
-
-	// ReplaceChars for localized changes within the line.
-	if newMiddle > 0 {
-		changed := max(oldMiddle, newMiddle)
-		if changed <= MaxReplaceCharsSpan {
-			return ChangeReplaceChars, changeStart, newEnd
-		}
-		return ChangeModification, 0, 0
-	}
-
-	return ChangeModification, 0, 0
+	return ChangeModification, 0, 0, nil
 }
 
 // FindFirstChangedLine compares old lines with new lines and returns the first line number (1-indexed)

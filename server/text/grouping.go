@@ -15,9 +15,10 @@ type Group struct {
 	BufferLine int
 
 	// Character-level rendering hints (single-line only)
-	RenderHint string // "", "append_chars", "replace_chars", "delete_chars"
-	ColStart   int    // For character-level changes
-	ColEnd     int    // For character-level changes
+	RenderHint string       // "", "append_chars", "inline_diff", "stacked"
+	ColStart   int          // For character-level changes
+	ColEnd     int          // For character-level changes
+	Spans      []InlineSpan // Word-level edit spans (inline_diff only)
 }
 
 // GroupChanges groups consecutive same-type changes for efficient rendering.
@@ -85,6 +86,7 @@ func GroupChanges(changes map[int]LineChange) []*Group {
 				currentGroup.RenderHint = ""
 				currentGroup.ColStart = 0
 				currentGroup.ColEnd = 0
+				currentGroup.Spans = nil
 			}
 		}
 	}
@@ -114,6 +116,10 @@ func CopyGroups(groups []*Group) []*Group {
 			cp.OldLines = make([]string, len(g.OldLines))
 			copy(cp.OldLines, g.OldLines)
 		}
+		if g.Spans != nil {
+			cp.Spans = make([]InlineSpan, len(g.Spans))
+			copy(cp.Spans, g.Spans)
+		}
 		result[i] = &cp
 	}
 	return result
@@ -125,36 +131,31 @@ func setRenderHint(group *Group, change LineChange) {
 	if group.RenderHint != "" {
 		group.ColStart = change.ColStart
 		group.ColEnd = change.ColEnd
+		group.Spans = change.Spans
 	} else {
 		group.ColStart = 0
 		group.ColEnd = 0
+		group.Spans = nil
 	}
 }
 
-// ValidateRenderHintsForCursor downgrades character-level hints to regular modification
-// when the cursor would be hidden under the overlay. This switches to side-by-side
-// rendering so the cursor remains visible.
-//
-// Both append_chars and replace_chars: downgrade when cursor is past the change start (ColStart < cursorCol)
+// ValidateRenderHintsForCursor downgrades append_chars to regular modification
+// when the cursor would be hidden under its overlay. Only append_chars renders
+// overlay-backed content that can cover the cursor; inline_diff uses plain
+// extmarks (deletion highlights and inline virtual text) that leave the cursor
+// on real buffer text, so it never needs downgrading.
 func ValidateRenderHintsForCursor(groups []*Group, cursorRow, cursorCol int) {
 	for _, g := range groups {
-		if g.BufferLine != cursorRow {
+		if g.BufferLine != cursorRow || g.RenderHint != "append_chars" {
 			continue
 		}
-		switch g.RenderHint {
-		case "append_chars":
-			// Skip when cursor is at or past end of old content — append only
-			// adds after existing text, so there's nothing for the overlay to hide.
-			if len(g.OldLines) == 1 && cursorCol >= len(g.OldLines[0]) {
-				continue
-			}
-			if g.ColStart < cursorCol {
-				g.RenderHint = ""
-			}
-		case "replace_chars":
-			if g.ColStart < cursorCol {
-				g.RenderHint = ""
-			}
+		// Skip when cursor is at or past end of old content — append only
+		// adds after existing text, so there's nothing for the overlay to hide.
+		if len(g.OldLines) == 1 && cursorCol >= len(g.OldLines[0]) {
+			continue
+		}
+		if g.ColStart < cursorCol {
+			g.RenderHint = ""
 		}
 	}
 }
@@ -215,15 +216,12 @@ func CalculateCursorPosition(changes map[int]LineChange, newLines []string) (int
 		return -1, -1
 	}
 
-	// For character-level changes, position at end of the actual change
-	// For DeleteChars, use ColStart (deletion point) since ColEnd is in old coordinates
-	// For AppendChars/ReplaceChars, use ColEnd (end of inserted text)
-	// For full-line changes, position at end of line
+	// For character-level changes, position at the end of the changed
+	// envelope: ColEnd is in new-line coordinates for both append_chars and
+	// inline_diff (for a pure deletion the envelope is empty, so ColEnd is
+	// the deletion point). For full-line changes, position at end of line.
 	change, exists := changes[targetLine]
 	if exists && change.Type.IsCharacterLevel() {
-		if change.Type == ChangeDeleteChars {
-			return targetLine, change.ColStart
-		}
 		return targetLine, change.ColEnd
 	}
 

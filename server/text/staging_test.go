@@ -1923,7 +1923,7 @@ func TestGroupsDoNotOverlapWithModifications(t *testing.T) {
 			// Modification at new line 1
 			{Type: ChangeModification, NewLineNum: 1, OldLineNum: 3, Content: "new1", OldContent: "old3"},
 			// Character-level change at new line 2
-			{Type: ChangeDeleteChars, NewLineNum: 2, OldLineNum: 1, Content: "new2", OldContent: "old1", ColStart: 0, ColEnd: 4},
+			{Type: ChangeInlineDiff, NewLineNum: 2, OldLineNum: 1, Content: "new2", OldContent: "old1", ColStart: 0, ColEnd: 4},
 			// Addition at new line 3
 			{Type: ChangeAddition, NewLineNum: 3, OldLineNum: -1, Content: "added3"},
 			// Addition at new line 4

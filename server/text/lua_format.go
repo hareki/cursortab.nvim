@@ -35,7 +35,20 @@ func ToLuaFormat(stage *Stage, startLine int) map[string]any {
 			"old_lines":   g.OldLines,
 		}
 
-		if g.RenderHint != "" {
+		switch {
+		case g.RenderHint == "inline_diff":
+			luaGroup["render_hint"] = g.RenderHint
+			spans := make([]map[string]any, len(g.Spans))
+			for i, s := range g.Spans {
+				spans[i] = map[string]any{
+					"col_start":     s.OldStart,
+					"col_end":       s.OldEnd,
+					"new_col_start": s.NewStart,
+					"new_col_end":   s.NewEnd,
+				}
+			}
+			luaGroup["spans"] = spans
+		case g.RenderHint != "":
 			luaGroup["render_hint"] = g.RenderHint
 			luaGroup["col_start"] = g.ColStart
 			luaGroup["col_end"] = g.ColEnd

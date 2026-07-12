@@ -47,7 +47,7 @@ A Neovim plugin that provides edit completions and cursor predictions.
 ## Requirements
 
 - Go 1.25.0+ (for building the server component)
-- Neovim 0.8+ (for the plugin)
+- Neovim 0.10+ (for the plugin)
 
 ## Installation
 

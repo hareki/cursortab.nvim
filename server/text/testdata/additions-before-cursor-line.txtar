@@ -18,7 +18,7 @@ stage @1 cursor=4:20
   addition @2 2-3
     + "added line 1"
     + "added line 2"
-  modification @2 4-4 replace_chars 12:20
+  modification @2 4-4 inline_diff 12:19->12:20
     + "cursor line replaced"
     - "cursor line content"
 

@@ -406,7 +406,7 @@ func finalizeStages(builders []*stageBuilder, newLines []string, oldLines []stri
 				if bufLine == cursorRow && oldIdx >= 0 && oldIdx < len(oldLines) {
 					oldContent := oldLines[oldIdx]
 					if oldContent != "" && strings.TrimSpace(oldContent) == "" {
-						changeType, colStart, colEnd := categorizeLineChangeWithColumns(oldContent, change.Content)
+						changeType, colStart, colEnd, spans := categorizeLineChange(oldContent, change.Content)
 						b.rawChanges[0] = LineChange{
 							Type:       changeType,
 							OldLineNum: oldIdx + 1,
@@ -415,6 +415,7 @@ func finalizeStages(builders []*stageBuilder, newLines []string, oldLines []stri
 							OldContent: oldContent,
 							ColStart:   colStart,
 							ColEnd:     colEnd,
+							Spans:      spans,
 						}
 						computeStageRanges(b, baseLineOffset, diff)
 					}

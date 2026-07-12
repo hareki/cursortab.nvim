@@ -188,7 +188,7 @@ func TestTextEditForCharGroupAppend(t *testing.T) {
 
 func TestTextEditForCharGroupReplace(t *testing.T) {
 	edit, ok := textEditForCharGroup(&text.Group{
-		RenderHint: "replace_chars",
+		RenderHint: "inline_diff",
 		StartLine:  1,
 		EndLine:    1,
 		BufferLine: 1,
@@ -205,7 +205,7 @@ func TestTextEditForCharGroupReplace(t *testing.T) {
 
 func TestTextEditForCharGroupDelete(t *testing.T) {
 	edit, ok := textEditForCharGroup(&text.Group{
-		RenderHint: "delete_chars",
+		RenderHint: "inline_diff",
 		StartLine:  1,
 		EndLine:    1,
 		BufferLine: 1,
@@ -222,7 +222,7 @@ func TestTextEditForCharGroupDelete(t *testing.T) {
 
 func TestTextEditForCharGroupReplaceUsesUTF8Boundaries(t *testing.T) {
 	edit, ok := textEditForCharGroup(&text.Group{
-		RenderHint: "replace_chars",
+		RenderHint: "inline_diff",
 		StartLine:  1,
 		EndLine:    1,
 		BufferLine: 1,

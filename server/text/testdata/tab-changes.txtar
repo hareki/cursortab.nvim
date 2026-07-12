@@ -9,8 +9,8 @@ viewportBottom: 50
 	first
 	modified
 -- expected --
-stage @2 cursor=1:8
-  modification @2 1-1 replace_chars 1:8
+stage @2 cursor=1:9
+  modification @2 1-1
     + "	modified"
     - "	second"
 

@@ -10,6 +10,15 @@ import (
 
 // --- Types ---
 
+// SpanInfo is one word-level edit span of an inline_diff group: byte ranges
+// in the old line (ColStart/ColEnd) and the new line (NewColStart/NewColEnd).
+type SpanInfo struct {
+	ColStart    int
+	ColEnd      int
+	NewColStart int
+	NewColEnd   int
+}
+
 type GroupInfo struct {
 	Type       string
 	StartLine  int
@@ -18,6 +27,7 @@ type GroupInfo struct {
 	RenderHint string
 	ColStart   int
 	ColEnd     int
+	Spans      []SpanInfo
 	Lines      []string
 }
 
@@ -40,6 +50,8 @@ type LineHighlight struct {
 	RenderHint string
 	ColStart   int
 	ColEnd     int
+	Spans      []SpanInfo // inline_diff spans (old-line byte cols)
+	NewText    string     // new line content for inline_diff insertions
 }
 
 // PreviewLine is a single line in the editor preview.
@@ -68,6 +80,30 @@ func JSONInt(v any) int {
 func JSONStr(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func parseSpans(v any) []SpanInfo {
+	var spanMaps []map[string]any
+	switch s := v.(type) {
+	case []any:
+		for _, item := range s {
+			if m, ok := item.(map[string]any); ok {
+				spanMaps = append(spanMaps, m)
+			}
+		}
+	case []map[string]any:
+		spanMaps = s
+	}
+	var spans []SpanInfo
+	for _, m := range spanMaps {
+		spans = append(spans, SpanInfo{
+			ColStart:    JSONInt(m["col_start"]),
+			ColEnd:      JSONInt(m["col_end"]),
+			NewColStart: JSONInt(m["new_col_start"]),
+			NewColEnd:   JSONInt(m["new_col_end"]),
+		})
+	}
+	return spans
 }
 
 func ParseStages(data []map[string]any) []StageInfo {
@@ -113,6 +149,7 @@ func ParseStages(data []map[string]any) []StageInfo {
 				RenderHint: JSONStr(g["render_hint"]),
 				ColStart:   JSONInt(g["col_start"]),
 				ColEnd:     JSONInt(g["col_end"]),
+				Spans:      parseSpans(g["spans"]),
 				Lines:      lines,
 			})
 		}
@@ -221,47 +258,38 @@ func RenderLine(b *strings.Builder, lineNum int, text string, hl LineHighlight, 
 		fmt.Fprintf(b, "<span class=\"line\"><span class=\"ln\">%d</span>%s<span class=\"ghost\">%s</span></span>",
 			lineNum, before, ghost)
 		return
-	case "replace_chars":
+	case "inline_diff":
+		// Walk the OLD line left to right: plain segments, del-hl over each
+		// span's deleted range, add-hl with the inserted new-line slice right
+		// after it. The cursor lives on real buffer text, so it is only
+		// injected into old-text segments, never into insertions.
 		runes := []rune(expanded)
-		cs := mapCol(hl.ColStart, mapping)
-		ce := mapCol(hl.ColEnd, mapping)
-		ce = min(ce, len(runes))
-		if ce <= cs {
-			ce = len(runes)
+		segment := func(a, b int, final bool) string {
+			s := string(runes[a:b])
+			if mappedCursor >= a && (mappedCursor < b || (final && mappedCursor >= b)) {
+				return injectCursor(s, mappedCursor-a)
+			}
+			return html.EscapeString(s)
 		}
-		before := html.EscapeString(string(runes[:cs]))
-		mid := html.EscapeString(string(runes[cs:ce]))
-		after := html.EscapeString(string(runes[ce:]))
-		if mappedCursor >= 0 && mappedCursor < cs {
-			before = injectCursor(string(runes[:cs]), mappedCursor)
-		} else if mappedCursor >= cs && mappedCursor < ce {
-			mid = injectCursor(string(runes[cs:ce]), mappedCursor-cs)
-		} else if mappedCursor >= ce {
-			after = injectCursor(string(runes[ce:]), mappedCursor-ce)
+		var out strings.Builder
+		pos := 0
+		for _, sp := range hl.Spans {
+			cs := min(mapCol(sp.ColStart, mapping), len(runes))
+			ce := min(mapCol(sp.ColEnd, mapping), len(runes))
+			cs = max(min(cs, ce), pos)
+			ce = max(ce, cs)
+			out.WriteString(segment(pos, cs, false))
+			if ce > cs {
+				fmt.Fprintf(&out, "<span class=\"del-hl\">%s</span>", segment(cs, ce, false))
+			}
+			if sp.NewColStart >= 0 && sp.NewColEnd > sp.NewColStart && sp.NewColEnd <= len(hl.NewText) {
+				inserted, _ := expandTabsWithMap(hl.NewText[sp.NewColStart:sp.NewColEnd])
+				fmt.Fprintf(&out, "<span class=\"add-hl\">%s</span>", html.EscapeString(inserted))
+			}
+			pos = ce
 		}
-		fmt.Fprintf(b, "<span class=\"line\"><span class=\"ln\">%d</span>%s<span class=\"add-hl\">%s</span>%s</span>",
-			lineNum, before, mid, after)
-		return
-	case "delete_chars":
-		runes := []rune(expanded)
-		cs := mapCol(hl.ColStart, mapping)
-		ce := mapCol(hl.ColEnd, mapping)
-		ce = min(ce, len(runes))
-		if ce <= cs {
-			ce = len(runes)
-		}
-		before := html.EscapeString(string(runes[:cs]))
-		mid := html.EscapeString(string(runes[cs:ce]))
-		after := html.EscapeString(string(runes[ce:]))
-		if mappedCursor >= 0 && mappedCursor < cs {
-			before = injectCursor(string(runes[:cs]), mappedCursor)
-		} else if mappedCursor >= cs && mappedCursor < ce {
-			mid = injectCursor(string(runes[cs:ce]), mappedCursor-cs)
-		} else if mappedCursor >= ce {
-			after = injectCursor(string(runes[ce:]), mappedCursor-ce)
-		}
-		fmt.Fprintf(b, "<span class=\"line\"><span class=\"ln\">%d</span>%s<span class=\"del-hl\">%s</span>%s</span>",
-			lineNum, before, mid, after)
+		out.WriteString(segment(pos, len(runes), true))
+		fmt.Fprintf(b, "<span class=\"line\"><span class=\"ln\">%d</span>%s</span>", lineNum, out.String())
 		return
 	}
 
@@ -359,16 +387,10 @@ func BuildPreview(oldText, newText string, stages []StageInfo, cursorRow, cursor
 							newContent: lineContent,
 							hl:         LineHighlight{RenderHint: "append_chars", ColStart: g.ColStart},
 						}
-					} else if isSingle && g.RenderHint == "replace_chars" {
+					} else if isSingle && g.RenderHint == "inline_diff" {
 						actions[oldBufLine] = lineAction{
-							kind:       "replace_chars",
-							newContent: lineContent,
-							hl:         LineHighlight{RenderHint: "replace_chars", ColStart: g.ColStart, ColEnd: g.ColEnd},
-						}
-					} else if isSingle && g.RenderHint == "delete_chars" {
-						actions[oldBufLine] = lineAction{
-							kind: "delete_chars",
-							hl:   LineHighlight{RenderHint: "delete_chars", ColStart: g.ColStart, ColEnd: g.ColEnd},
+							kind: "inline_diff",
+							hl:   LineHighlight{RenderHint: "inline_diff", Spans: g.Spans, NewText: lineContent},
 						}
 					} else if isSingle {
 						actions[oldBufLine] = lineAction{
@@ -407,9 +429,7 @@ func BuildPreview(oldText, newText string, stages []StageInfo, cursorRow, cursor
 			switch action.kind {
 			case "append_chars":
 				preview = append(preview, PreviewLine{Text: action.newContent, HL: action.hl})
-			case "replace_chars":
-				preview = append(preview, PreviewLine{Text: action.newContent, HL: action.hl})
-			case "delete_chars":
+			case "inline_diff":
 				preview = append(preview, PreviewLine{Text: line, HL: action.hl})
 			case "del":
 				preview = append(preview, PreviewLine{Text: line, HL: LineHighlight{Class: "del"}})

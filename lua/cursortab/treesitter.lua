@@ -122,6 +122,121 @@ function M.get_context(bufnr, row, col, max_siblings)
 	}
 end
 
+---@class HLChunk
+---@field text string
+---@field hl string|nil Treesitter highlight group, nil for unhighlighted text
+
+---Treesitter-highlight a single line (as a detached string), split into chunks
+---at highlight boundaries. Returns nil when no parser or highlight query is
+---available for the filetype, so callers can fall back to plain highlighting.
+---@param line string
+---@param ft string
+---@return HLChunk[]|nil
+function M.line_chunks(line, ft)
+	if line == "" or not ft or ft == "" then
+		return nil
+	end
+
+	local lang = vim.treesitter.language.get_lang(ft)
+	if not lang then
+		return nil
+	end
+
+	local ok, parser = pcall(vim.treesitter.get_string_parser, line, lang)
+	if not ok or not parser then
+		return nil
+	end
+	if not pcall(parser.parse, parser, true) then
+		return nil
+	end
+
+	-- Per-byte highlight index (1-indexed); higher-priority captures win
+	---@type table<integer, {hl: string, priority: integer}>
+	local index = {}
+	local has_query = false
+	parser:for_each_tree(function(tstree, tree)
+		if not tstree then
+			return
+		end
+		local query_ok, query = pcall(vim.treesitter.query.get, tree:lang(), "highlights")
+		if not query_ok or not query then
+			return
+		end
+		has_query = true
+		for capture, node, metadata in query:iter_captures(tstree:root(), line) do
+			local name = query.captures[capture]
+			if name ~= "spell" and name ~= "nospell" and name ~= "conceal" then
+				local _, start_col, _, end_col = node:range()
+				local priority = tonumber(metadata.priority or (metadata[capture] and metadata[capture].priority))
+					or 100
+				local hl = "@" .. name .. "." .. tree:lang()
+				for i = start_col + 1, math.min(end_col, #line) do
+					local existing = index[i]
+					if not existing or priority >= existing.priority then
+						index[i] = { hl = hl, priority = priority }
+					end
+				end
+			end
+		end
+	end)
+	if not has_query then
+		return nil
+	end
+
+	-- Coalesce per-byte highlights into contiguous chunks
+	---@type HLChunk[]
+	local chunks = {}
+	local from = 1
+	local current = index[1] and index[1].hl
+	for col = 2, #line + 1 do
+		local hl = index[col] and index[col].hl
+		if col > #line or hl ~= current then
+			table.insert(chunks, { text = line:sub(from, col - 1), hl = current })
+			from = col
+			current = hl
+		end
+	end
+	return chunks
+end
+
+---Slice a byte range out of highlighted chunks as extmark virt_text, combining
+---each chunk's treesitter group with a background group. Falls back to the raw
+---slice with just the background group when chunks is nil.
+---@param chunks HLChunk[]|nil From M.line_chunks over the full line
+---@param line string Full line the chunks were computed from
+---@param start_col integer 0-based byte column, inclusive
+---@param end_col integer 0-based byte column, exclusive
+---@param bg string Background highlight group (e.g. "CursorTabAddition")
+---@return [string, string|string[]][]
+function M.slice_chunks(chunks, line, start_col, end_col, bg)
+	if not chunks then
+		return { { string.sub(line, start_col + 1, end_col), bg } }
+	end
+
+	---@type [string, string|string[]][]
+	local result = {}
+	local pos = 0 -- 0-based byte offset of the current chunk's start
+	for _, chunk in ipairs(chunks) do
+		local chunk_end = pos + #chunk.text
+		local from = math.max(pos, start_col)
+		local to = math.min(chunk_end, end_col)
+		if to > from then
+			-- The bg group comes last so its background wins over the
+			-- (foreground-only) treesitter group
+			table.insert(result, { string.sub(line, from + 1, to), chunk.hl and { chunk.hl, bg } or bg })
+		end
+		pos = chunk_end
+		if pos >= end_col then
+			break
+		end
+	end
+
+	if #result == 0 then
+		return { { string.sub(line, start_col + 1, end_col), bg } }
+	end
+	return result
+end
+
 ---Get treesitter node types from cursor to root.
 ---@param bufnr integer Buffer number
 ---@param row integer 1-indexed cursor row

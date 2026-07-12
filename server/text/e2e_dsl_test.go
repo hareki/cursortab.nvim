@@ -8,17 +8,22 @@
 //	    + "<new line>"
 //	    - "<old line>"
 //
+// inline_diff groups carry word-level spans instead of a single column pair,
+// one `<oldStart>:<oldEnd>-><newStart>:<newEnd>` field per span:
+//
+//	<type> @<bufferLine> <startLine>-<endLine> inline_diff <o:o->n:n> ...
+//
 // Multiple stages are separated by blank lines.
 //
 // Group types: addition, modification, deletion.
-// Render hints: append_chars, replace_chars, delete_chars.
+// Render hints: append_chars, inline_diff, stacked.
 // + lines map to the "lines" field, - lines map to "old_lines".
 // Lines are quoted with " and only " and \ are escaped.
 //
 // Example:
 //
 //	stage @2 cursor=3:30
-//	  modification @2 1-1 replace_chars 17:20
+//	  modification @2 1-1 inline_diff 17:20->17:20
 //	    + "    console.log(\"new message\");"
 //	    - "    console.log(\"old message\");"
 //	  addition @4 3-3
@@ -71,11 +76,20 @@ func formatExpected(stages []map[string]any) string {
 			endL := toInt(g["end_line"])
 
 			hint, _ := g["render_hint"].(string)
-			if hint != "" {
+			switch {
+			case hint == "inline_diff":
+				fmt.Fprintf(&b, "  %s @%d %d-%d %s", typ, bufLine, startL, endL, hint)
+				for _, sp := range toMapSlice(g["spans"]) {
+					fmt.Fprintf(&b, " %d:%d->%d:%d",
+						toInt(sp["col_start"]), toInt(sp["col_end"]),
+						toInt(sp["new_col_start"]), toInt(sp["new_col_end"]))
+				}
+				b.WriteByte('\n')
+			case hint != "":
 				colStart := toInt(g["col_start"])
 				colEnd := toInt(g["col_end"])
 				fmt.Fprintf(&b, "  %s @%d %d-%d %s %d:%d\n", typ, bufLine, startL, endL, hint, colStart, colEnd)
-			} else {
+			default:
 				fmt.Fprintf(&b, "  %s @%d %d-%d\n", typ, bufLine, startL, endL)
 			}
 
@@ -216,7 +230,24 @@ func parseGroupHeader(s string) map[string]any {
 		"old_lines":   nil,
 	}
 
-	if len(parts) >= 5 {
+	if len(parts) >= 4 && parts[3] == "inline_diff" {
+		var spans []any
+		for _, field := range parts[4:] {
+			var oldStart, oldEnd, newStart, newEnd int
+			n, _ := fmt.Sscanf(field, "%d:%d->%d:%d", &oldStart, &oldEnd, &newStart, &newEnd)
+			if n != 4 {
+				return nil
+			}
+			spans = append(spans, map[string]any{
+				"col_start":     oldStart,
+				"col_end":       oldEnd,
+				"new_col_start": newStart,
+				"new_col_end":   newEnd,
+			})
+		}
+		g["render_hint"] = parts[3]
+		g["spans"] = spans
+	} else if len(parts) >= 5 {
 		hint := parts[3]
 		var colStart, colEnd int
 		fmt.Sscanf(parts[4], "%d:%d", &colStart, &colEnd)
@@ -239,6 +270,23 @@ func toInt(v any) int {
 		return int(i)
 	default:
 		return 0
+	}
+}
+
+func toMapSlice(v any) []map[string]any {
+	switch s := v.(type) {
+	case []map[string]any:
+		return s
+	case []any:
+		var result []map[string]any
+		for _, item := range s {
+			if m, ok := item.(map[string]any); ok {
+				result = append(result, m)
+			}
+		}
+		return result
+	default:
+		return nil
 	}
 }
 
