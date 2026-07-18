@@ -7,6 +7,14 @@ local treesitter = require("cursortab.treesitter")
 ---@class UIModule
 local ui = {}
 
+-- Left/right end glyphs keyed by ui.jump.shape; a shape absent from this table
+-- renders no end glyphs. They use CursorTabJumpSymbol (fg matches the pill
+-- background) so the glyph's solid half continues the body and its rounded half
+-- blends with the background.
+local SHAPES = {
+	pill = { LEFT = "", RIGHT = "" },
+}
+
 -- Dimmed highlight namespaces for overlay windows
 ---@type table<string, integer>
 local dimmed_ns_cache = {}
@@ -932,12 +940,19 @@ local function show_cursor_prediction(line_num)
 		---@type integer
 		local line_length = #line_content
 
+		-- Left keeps jump.symbol; shapes with end glyphs round the right end.
+		local shape = SHAPES[cfg.ui.jump.shape]
+		local virt_text = {
+			{ " " .. cfg.ui.jump.symbol, "CursorTabJumpSymbol" },
+			{ cfg.ui.jump.text, "CursorTabJumpText" },
+		}
+		if shape then
+			table.insert(virt_text, { shape.RIGHT, "CursorTabJumpSymbol" })
+		end
+
 		jump_text_extmark_id =
 			vim.api.nvim_buf_set_extmark(current_buf, daemon.get_namespace_id(), line_num - 1, line_length, {
-				virt_text = {
-					{ " " .. cfg.ui.jump.symbol, "CursorTabJumpSymbol" },
-					{ cfg.ui.jump.text, "CursorTabJumpText" },
-				},
+				virt_text = virt_text,
 				virt_text_pos = "overlay",
 				hl_mode = "combine",
 			})
@@ -963,13 +978,16 @@ local function show_cursor_prediction(line_num)
 		end
 
 		-- Create a scratch buffer for the arrow indicator
+		-- Shapes with end glyphs wrap both ends around the body.
+		local shape = SHAPES[cfg.ui.jump.shape]
+		local line = shape and (shape.LEFT .. display_text .. shape.RIGHT) or display_text
 		absolute_jump_buf = vim.api.nvim_create_buf(false, true)
-		vim.api.nvim_buf_set_lines(absolute_jump_buf, 0, -1, false, { display_text })
+		vim.api.nvim_buf_set_lines(absolute_jump_buf, 0, -1, false, { line })
 		vim.api.nvim_set_option_value("modifiable", false, { buf = absolute_jump_buf })
 
 		-- Calculate position - center horizontally, top or bottom vertically
 		---@type integer
-		local text_width = vim.fn.strdisplaywidth(display_text)
+		local text_width = vim.fn.strdisplaywidth(line)
 		---@type integer
 		local col = math.max(0, math.floor((win_width - text_width) / 2))
 		---@type integer
@@ -989,8 +1007,30 @@ local function show_cursor_prediction(line_num)
 			focusable = false,
 		})
 
-		-- Set window background to match jump text highlight
-		vim.api.nvim_set_option_value("winhighlight", "Normal:CursorTabJumpText", { win = absolute_jump_win })
+		if shape then
+			-- Body keeps the pill background; the end glyphs use the symbol fg (which
+			-- matches the pill background) over the editor background so the
+			-- half-circles render as rounded ends rather than blocks.
+			vim.api.nvim_set_option_value("winhighlight", "Normal:Normal", { win = absolute_jump_win })
+			local ns = daemon.get_namespace_id()
+			local left_bytes = #shape.LEFT
+			local body_end = left_bytes + #display_text
+			vim.api.nvim_buf_set_extmark(absolute_jump_buf, ns, 0, left_bytes, {
+				end_col = body_end,
+				hl_group = "CursorTabJumpText",
+			})
+			vim.api.nvim_buf_set_extmark(absolute_jump_buf, ns, 0, 0, {
+				end_col = left_bytes,
+				hl_group = "CursorTabJumpSymbol",
+			})
+			vim.api.nvim_buf_set_extmark(absolute_jump_buf, ns, 0, body_end, {
+				end_col = body_end + #shape.RIGHT,
+				hl_group = "CursorTabJumpSymbol",
+			})
+		else
+			-- Set window background to match jump text highlight
+			vim.api.nvim_set_option_value("winhighlight", "Normal:CursorTabJumpText", { win = absolute_jump_win })
+		end
 	end
 end
 

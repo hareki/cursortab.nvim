@@ -116,6 +116,7 @@ function M.check()
 	vim.health.info("addition_style: " .. cfg.ui.completions.addition_style)
 	vim.health.info("fg_opacity: " .. cfg.ui.completions.fg_opacity)
 	vim.health.info("jump_symbol: " .. cfg.ui.jump.symbol)
+	vim.health.info("jump_shape: " .. cfg.ui.jump.shape)
 	vim.health.info("jump_text: " .. cfg.ui.jump.text)
 	vim.health.info("jump_show_distance: " .. (cfg.ui.jump.show_distance and "yes" or "no"))
 

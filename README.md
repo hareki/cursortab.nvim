@@ -162,6 +162,7 @@ require("cursortab").setup({
     },
     jump = {
       symbol = "",              -- Symbol shown for jump points
+      shape = "default",         -- Jump indicator shape: "default" or "pill"
       text = " TAB ",            -- Text displayed after jump symbol
       show_distance = true,      -- Show line distance for off-screen jumps
     },
