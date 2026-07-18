@@ -64,6 +64,7 @@ Full configuration with defaults: >lua
         symbol = "",
         text = " TAB ",
         show_distance = true,
+        shape = "default",
       },
     },
 
@@ -188,6 +189,8 @@ ui.jump                                              *cursortab-config-ui-jump*
                   Set to "" to hide it.
   `text`          Text shown in jump indicator (default: " TAB ").
   `show_distance` Show line distance for off-screen jumps (default: true).
+  `shape`         Jump indicator shape: "default" or "pill" (rounded caps)
+                  (default: "default").
 
 ------------------------------------------------------------------------------
 BEHAVIOR OPTIONS                                    *cursortab-config-behavior*

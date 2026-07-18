@@ -4,6 +4,7 @@
 ---@field symbol string
 ---@field text string
 ---@field show_distance boolean
+---@field shape string "default" or "pill"
 
 ---@class CursortabUICompletionsConfig
 ---@field addition_style string "dimmed" or "highlight"
@@ -99,6 +100,7 @@ local default_config = {
 			symbol = "",
 			text = " TAB ",
 			show_distance = true,
+			shape = "default", -- "default" or "pill" (rounded caps)
 		},
 	},
 
@@ -294,6 +296,7 @@ local valid_provider_types = {
 }
 local valid_log_levels = { trace = true, debug = true, info = true, warn = true, error = true }
 local valid_addition_styles = { dimmed = true, highlight = true }
+local valid_jump_shapes = { default = true, pill = true }
 
 -- Optional tables have recognized keys without supplying default values.
 local config_keys = vim.deepcopy(default_config)
@@ -361,6 +364,16 @@ local function validate_config(cfg)
 			error(string.format(
 				"[cursortab.nvim] Invalid ui.completions.addition_style '%s'. Must be one of: dimmed, highlight",
 				cfg.ui.completions.addition_style
+			))
+		end
+	end
+
+	-- Validate jump shape
+	if cfg.ui and cfg.ui.jump and cfg.ui.jump.shape then
+		if not valid_jump_shapes[cfg.ui.jump.shape] then
+			error(string.format(
+				"[cursortab.nvim] Invalid ui.jump.shape '%s'. Must be one of: default, pill",
+				cfg.ui.jump.shape
 			))
 		end
 	end
